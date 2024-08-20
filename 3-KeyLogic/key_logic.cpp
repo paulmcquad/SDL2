@@ -217,16 +217,11 @@ int main()
 			//Set default current surface
 			gCurrentSurface = gKeyPressSurfaces[ KEY_PRESS_SURFACE_DEFAULT ];
 
-#ifdef _JS
-
-                        emscripten_set_main_loop_arg(loop_handler, NULL, -1, 1);
-#else
 			//While application is running
 			while( !quit )
 			{
 		 	 loop_handler(NULL);	
 			}
-#endif
 
 		}
 	}
