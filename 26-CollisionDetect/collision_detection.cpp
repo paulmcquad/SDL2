@@ -52,38 +52,6 @@ class LTexture
 		int mHeight;
 };
 
-//The application time based timer
-class LTimer
-{
-    public:
-		//Initializes variables
-		LTimer();
-
-		//The various clock actions
-		void start();
-		void stop();
-		void pause();
-		void unpause();
-
-		//Gets the timer's time
-		Uint32 getTicks();
-
-		//Checks the status of the timer
-		bool isStarted();
-		bool isPaused();
-
-    private:
-		//The clock time when the timer started
-		Uint32 mStartTicks;
-
-		//The ticks stored when the timer was paused
-		Uint32 mPausedTicks;
-
-		//The timer status
-		bool mPaused;
-		bool mStarted;
-};
-
 //The dot that will move around on the screen
 class Dot
 {
@@ -101,8 +69,8 @@ class Dot
 		//Takes key presses and adjusts the dot's velocity
 		void handleEvent( SDL_Event& e );
 
-		//Moves the dot
-		void move();
+		//Moves the dot and checks collision
+		void move( SDL_Rect& wall );
 
 		//Shows the dot on the screen
 		void render();
@@ -113,6 +81,9 @@ class Dot
 
 		//The velocity of the dot
 		int mVelX, mVelY;
+		
+		//Dot's collision box
+		SDL_Rect mCollider;
 };
 
 //Starts up SDL and creates window
@@ -123,6 +94,9 @@ bool loadMedia();
 
 //Frees media and shuts down SDL
 void close();
+
+//Box collision detector
+bool checkCollision( SDL_Rect a, SDL_Rect b );
 
 //The window we'll be rendering to
 SDL_Window* gWindow = NULL;
@@ -282,12 +256,15 @@ int LTexture::getHeight()
 	return mHeight;
 }
 
-
 Dot::Dot()
 {
     //Initialize the offsets
     mPosX = 0;
     mPosY = 0;
+
+	//Set collision box dimension
+	mCollider.w = DOT_WIDTH;
+	mCollider.h = DOT_HEIGHT;
 
     //Initialize the velocity
     mVelX = 0;
@@ -322,26 +299,30 @@ void Dot::handleEvent( SDL_Event& e )
     }
 }
 
-void Dot::move()
+void Dot::move( SDL_Rect& wall )
 {
     //Move the dot left or right
     mPosX += mVelX;
+	mCollider.x = mPosX;
 
-    //If the dot went too far to the left or right
-    if( ( mPosX < 0 ) || ( mPosX + DOT_WIDTH > SCREEN_WIDTH ) )
+    //If the dot collided or went too far to the left or right
+    if( ( mPosX < 0 ) || ( mPosX + DOT_WIDTH > SCREEN_WIDTH ) || checkCollision( mCollider, wall ) )
     {
         //Move back
         mPosX -= mVelX;
+		mCollider.x = mPosX;
     }
 
     //Move the dot up or down
     mPosY += mVelY;
+	mCollider.y = mPosY;
 
-    //If the dot went too far up or down
-    if( ( mPosY < 0 ) || ( mPosY + DOT_HEIGHT > SCREEN_HEIGHT ) )
+    //If the dot collided or went too far up or down
+    if( ( mPosY < 0 ) || ( mPosY + DOT_HEIGHT > SCREEN_HEIGHT ) || checkCollision( mCollider, wall ) )
     {
         //Move back
         mPosY -= mVelY;
+		mCollider.y = mPosY;
     }
 }
 
@@ -418,7 +399,7 @@ bool loadMedia()
 	//Loading success flag
 	bool success = true;
 
-	//Load dot texture
+	//Load press texture
 	if( !gDotTexture.loadFromFile( "../assets/dot.bmp" ) )
 	{
 		printf( "Failed to load dot texture!\n" );
@@ -444,6 +425,51 @@ void close()
 	SDL_Quit();
 }
 
+bool checkCollision( SDL_Rect a, SDL_Rect b )
+{
+    //The sides of the rectangles
+    int leftA, leftB;
+    int rightA, rightB;
+    int topA, topB;
+    int bottomA, bottomB;
+
+    //Calculate the sides of rect A
+    leftA = a.x;
+    rightA = a.x + a.w;
+    topA = a.y;
+    bottomA = a.y + a.h;
+
+    //Calculate the sides of rect B
+    leftB = b.x;
+    rightB = b.x + b.w;
+    topB = b.y;
+    bottomB = b.y + b.h;
+
+    //If any of the sides from A are outside of B
+    if( bottomA <= topB )
+    {
+        return false;
+    }
+
+    if( topA >= bottomB )
+    {
+        return false;
+    }
+
+    if( rightA <= leftB )
+    {
+        return false;
+    }
+
+    if( leftA >= rightB )
+    {
+        return false;
+    }
+
+    //If none of the sides from A are outside B
+    return true;
+}
+
 //Main loop flag
 bool quit = false;
 
@@ -451,10 +477,15 @@ bool quit = false;
 //The dot that will be moving around on the screen
 Dot dot;
 
+//Set the wall
+SDL_Rect wall;
+			
+
 void loop_handler(void*)
 {
 	//Event handler
 	SDL_Event e;
+
 	//Handle events on queue
 	while( SDL_PollEvent( &e ) != 0 )
 	{
@@ -468,14 +499,18 @@ void loop_handler(void*)
 		dot.handleEvent( e );
 	}
 
-	//Move the dot
-	dot.move();
+	//Move the dot and check collision
+	dot.move( wall );
 
 	//Clear screen
 	SDL_SetRenderDrawColor( gRenderer, 0xFF, 0xFF, 0xFF, 0xFF );
 	SDL_RenderClear( gRenderer );
 
-	//Render objects
+	//Render wall
+	SDL_SetRenderDrawColor( gRenderer, 0x00, 0x00, 0x00, 0xFF );		
+	SDL_RenderDrawRect( gRenderer, &wall );
+				
+	//Render dot
 	dot.render();
 
 	//Update screen
@@ -499,12 +534,17 @@ int main()
 		}
 		else
 		{	
+			wall.x = 300;
+			wall.y = 40;
+			wall.w = 40;
+			wall.h = 400;
 
 			//While application is running
 			while( !quit )
 			{
 		 	 loop_handler(NULL);	
 			}
+
 		}
 	}
 
